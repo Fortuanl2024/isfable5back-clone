@@ -38,7 +38,10 @@ async function refreshStatus() {
       answerEl.classList.remove("pop");
       void answerEl.offsetWidth; // 强制重排,让动画可以重复触发
       answerEl.classList.add("pop");
-      if (s.available) celebrate(); // 状态翻转为可用时放一轮烟花庆祝
+      // 涂层还盖着时不放烟花,庆祝留到刮开那一刻,免得剧透
+      if (s.available && scratchDone) celebrate();
+      // 文字宽度变了(… → Yes/No),等布局完成后按新尺寸铺涂层
+      if (!scratchDone) requestAnimationFrame(initScratch);
     }
     answerEl.classList.toggle("yes", s.available);
     answerEl.classList.toggle("no", !s.available);
@@ -293,6 +296,7 @@ function explode(x, y, color, count = 100, shape) {
 }
 
 function celebrate() {
+  if (reducedMotion) return;
   for (let i = 0; i < 4; i++) setTimeout(() => launchRocket(), i * 350);
 }
 
@@ -713,7 +717,8 @@ function syncAnimLabel() {
 /* ---------- 点击任意空白处放烟花 ---------- */
 
 addEventListener("pointerdown", e => {
-  if (e.target.closest("button, a, input, summary")) return;
+  // 刮卡时不触发点击烟花
+  if (e.target.closest("button, a, input, summary, #scratch")) return;
 
   // 先检测是否点中了气球(用摇摆后的实际绘制位置做椭圆命中判定)
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -751,6 +756,147 @@ addEventListener("pointermove", e => {
     color: pick(["#e6b422", "#c96442", "#8e6bb5", "#4a7ab5"]),
     life: 36, maxLife: 36,
   });
+});
+
+/* ================================================================
+   刮刮乐:Yes/No 区域被银色涂层盖住,刮开约 45% 自动全部揭晓。
+   原理:涂层画在覆盖大字的小 canvas 上,指针拖动时用
+   destination-out 混合模式把笔迹区域"擦"成透明,露出下面的答案。
+   ================================================================ */
+
+const scratchCanvas = document.getElementById("scratch");
+const sctx = scratchCanvas.getContext("2d", { willReadFrequently: true });
+const rescratchBtn = document.getElementById("rescratch");
+
+let scratchDone = reducedMotion; // 减少动态效果时不玩刮卡,直接显示
+let scratching = false;
+let lastPt = null;
+let scratchChecks = 0;
+
+function initScratch() {
+  if (reducedMotion) return;
+  scratchDone = false;
+  lastPt = null;
+  rescratchBtn.hidden = true;
+  scratchCanvas.hidden = false;
+  scratchCanvas.style.opacity = "1";
+
+  const rect = scratchCanvas.parentElement.getBoundingClientRect();
+  const dpr = devicePixelRatio || 1;
+  scratchCanvas.width = Math.ceil(rect.width * dpr);
+  scratchCanvas.height = Math.ceil(rect.height * dpr);
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // 银灰渐变涂层
+  const g = sctx.createLinearGradient(0, 0, rect.width, rect.height);
+  g.addColorStop(0, "#c8c8ce");
+  g.addColorStop(0.5, "#eceff3");
+  g.addColorStop(1, "#b4b4bd");
+  sctx.fillStyle = g;
+  sctx.beginPath();
+  sctx.roundRect(0, 0, rect.width, rect.height, 18);
+  sctx.fill();
+
+  // 斜纹质感
+  sctx.save();
+  sctx.clip(); // 沿用上面的圆角路径,斜线不会画出边界
+  sctx.strokeStyle = "rgba(255,255,255,.4)";
+  sctx.lineWidth = 1;
+  for (let x = -rect.height; x < rect.width; x += 14) {
+    sctx.beginPath();
+    sctx.moveTo(x, 0);
+    sctx.lineTo(x + rect.height, rect.height);
+    sctx.stroke();
+  }
+  sctx.restore();
+
+  // 提示文字
+  sctx.fillStyle = "#63636e";
+  sctx.font = "600 17px 'Segoe UI', 'Microsoft YaHei', sans-serif";
+  sctx.textAlign = "center";
+  sctx.textBaseline = "middle";
+  sctx.fillText("🪙 刮开查看结果", rect.width / 2, rect.height / 2);
+}
+
+function scratchAt(clientX, clientY) {
+  const rect = scratchCanvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  sctx.save();
+  sctx.globalCompositeOperation = "destination-out"; // 画哪里,哪里变透明
+  sctx.lineWidth = 44;
+  sctx.lineCap = "round";
+  sctx.lineJoin = "round";
+  sctx.beginPath();
+  if (lastPt) sctx.moveTo(lastPt.x, lastPt.y);
+  else sctx.moveTo(x - 0.1, y);
+  sctx.lineTo(x, y);
+  sctx.stroke();
+  sctx.restore();
+  lastPt = { x, y };
+
+  // 银屑飞溅:复用气球碎片粒子,灰白配色
+  if (Math.random() < 0.6) {
+    particles.push({
+      type: "shred",
+      x: clientX + rand(-6, 6), y: clientY + rand(-4, 4),
+      vx: rand(-1.5, 1.5), vy: rand(-1, 0.5),
+      w: rand(2, 4), h: rand(3, 6),
+      rot: rand(0, Math.PI), vr: rand(-0.3, 0.3),
+      color: pick(["#c8c8ce", "#e3e6ea", "#aeaeb8"]),
+      life: rand(20, 35), maxLife: 35,
+    });
+  }
+
+  if (++scratchChecks % 6 === 0) checkScratchProgress();
+}
+
+function checkScratchProgress() {
+  const { width, height } = scratchCanvas;
+  const data = sctx.getImageData(0, 0, width, height).data;
+  let clear = 0, total = 0;
+  for (let i = 3; i < data.length; i += 4 * 16) { // 每 16 个像素抽 1 个采样
+    total++;
+    if (data[i] === 0) clear++;
+  }
+  if (clear / total > 0.45) revealScratch();
+}
+
+function revealScratch() {
+  if (scratchDone) return;
+  scratchDone = true;
+  scratching = false;
+  scratchCanvas.style.opacity = "0"; // 剩余涂层整体淡出
+  setTimeout(() => { scratchCanvas.hidden = true; }, 500);
+  rescratchBtn.hidden = false;
+
+  // 揭晓庆祝:大字重新弹出 + 卡片中心炸一朵金色牡丹 + 一轮烟花
+  answerEl.classList.remove("pop");
+  void answerEl.offsetWidth;
+  answerEl.classList.add("pop");
+  const r = scratchCanvas.getBoundingClientRect();
+  explode(r.left + r.width / 2, r.top + r.height / 2, "#e6b422", 60, "peony");
+  if (answerEl.textContent === "Yes") celebrate();
+}
+
+scratchCanvas.addEventListener("pointerdown", e => {
+  scratching = true;
+  scratchCanvas.setPointerCapture(e.pointerId);
+  navigator.vibrate?.(6); // 手机上给一点触感反馈
+  scratchAt(e.clientX, e.clientY);
+});
+scratchCanvas.addEventListener("pointermove", e => {
+  if (scratching) scratchAt(e.clientX, e.clientY);
+});
+scratchCanvas.addEventListener("pointerup", () => { scratching = false; lastPt = null; });
+scratchCanvas.addEventListener("pointercancel", () => { scratching = false; lastPt = null; });
+
+rescratchBtn.addEventListener("click", initScratch);
+
+// 窗口尺寸变化时涂层位置尺寸会失真,没刮完就重铺一层
+addEventListener("resize", () => {
+  if (!scratchDone && !scratchCanvas.hidden) initScratch();
 });
 
 /* ---------- 卡片滚动进入时淡入上浮 ---------- */

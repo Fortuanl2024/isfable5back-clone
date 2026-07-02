@@ -22,7 +22,10 @@
     <!-- 状态区 -->
     <section class="hero">
       <p class="hero-question">Claude Fable 5 回来了吗?</p>
-      <h1 id="answer" class="answer">…</h1>
+      <div class="scratch-area">
+        <h1 id="answer" class="answer">…</h1>
+        <canvas id="scratch" hidden></canvas>
+      </div>
       <p id="status-detail" class="status-detail">正在查询 Anthropic API…</p>
       <p class="status-meta">
         <span class="pulse" aria-hidden="true"></span>
@@ -30,6 +33,7 @@
         <span id="latency"></span>
       </p>
       <p class="hint">💡 点击页面空白处放烟花 · 右上角可切换动画模式</p>
+      <button id="rescratch" class="chip" type="button" hidden>🎫 再刮一次</button>
     </section>
 
     <!-- 邮件订阅 -->
