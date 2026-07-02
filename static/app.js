@@ -247,6 +247,24 @@ function celebrate() {
   for (let i = 0; i < 4; i++) setTimeout(() => launchRocket(), i * 350);
 }
 
+function popBalloon(p, drawX) {
+  // 一小团闪光 + 一圈橡胶碎片从球面向外飞溅
+  particles.push({ type: "flash", x: drawX, y: p.y, maxR: p.r * 2.2, life: 8, maxLife: 8, color: p.color });
+  for (let i = 0; i < 14; i++) {
+    const ang = rand(0, Math.PI * 2);
+    const sp = rand(2, 6) * (p.r / 24); // 大气球碎片飞得更远
+    particles.push({
+      type: "shred",
+      x: drawX + Math.cos(ang) * p.r * 0.5,
+      y: p.y + Math.sin(ang) * p.r * 0.6,
+      vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1,
+      w: rand(3, 7), h: rand(5, 10),
+      rot: rand(0, Math.PI), vr: rand(-0.3, 0.3),
+      color: p.color, life: rand(30, 50), maxLife: 50,
+    });
+  }
+}
+
 /* ---------- 主循环 ---------- */
 
 function tick() {
@@ -416,6 +434,23 @@ const UPDATE = {
     return p.life > 0;
   },
 
+  shred(p) {
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.15; // 橡胶片比火花重,坠得快
+    p.vx *= 0.98;
+    p.rot += p.vr;
+    p.life--;
+    const a = Math.max(p.life / p.maxLife, 0);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+    return p.life > 0 && p.y < canvas.height + 20;
+  },
+
   flash(p) {
     p.life--;
     const t = 1 - p.life / p.maxLife;
@@ -509,6 +544,21 @@ function syncAnimLabel() {
 
 addEventListener("pointerdown", e => {
   if (e.target.closest("button, a, input, summary")) return;
+
+  // 先检测是否点中了气球(用摇摆后的实际绘制位置做椭圆命中判定)
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    if (p.type !== "balloon") continue;
+    const drawX = p.x + Math.sin(p.phase + frame * 0.02) * p.sway;
+    const nx = (e.clientX - drawX) / (p.r * 0.78);
+    const ny = (e.clientY - p.y) / p.r;
+    if (nx * nx + ny * ny <= 1.3) { // 判定范围略大于球面,更好点中
+      popBalloon(p, drawX);
+      particles.splice(i, 1);
+      return; // 点中气球时不再触发烟花
+    }
+  }
+
   explode(e.clientX, e.clientY, `hsl(${rand(0, 360)}, 90%, 65%)`, 40);
 });
 
