@@ -127,12 +127,13 @@ const pick = arr => arr[(Math.random() * arr.length) | 0];
 const COLORS = ["#c96442", "#2e8b57", "#e6b422", "#4a7ab5", "#b5654a", "#8e6bb5"];
 const EMOJIS = ["🎉", "🥳", "✨", "🤖", "🎊", "⭐", "💫", "🍀"];
 
-const MODE_ORDER = ["confetti", "fireworks", "balloons", "emoji", "fireflies", "off"];
+const MODE_ORDER = ["confetti", "fireworks", "balloons", "emoji", "stars", "fireflies", "off"];
 const MODE_LABEL = {
   confetti: "🎉 彩带",
   fireworks: "🎆 烟花",
   balloons: "🎈 气球",
   emoji: "🌧️ Emoji 雨",
+  stars: "🌌 星空",
   fireflies: "✨ 萤火",
   off: "🚫 关闭",
 };
@@ -203,6 +204,31 @@ function emojiSprite(char, size) {
     EMOJI_SPRITES.set(key, s);
   }
   return s;
+}
+
+function spawnStar() {
+  const depth = Math.random(); // 景深:远层小暗慢、近层大亮快,形成视差
+  particles.push({
+    type: "star",
+    x: rand(0, canvas.width), y: rand(0, canvas.height),
+    r: 0.5 + depth * 1.4,
+    drift: 0.02 + depth * 0.06,
+    color: pick(["#ffffff", "#cfe2ff", "#ffe9c4"]), // 白、蓝白、暖黄,模拟不同色温的恒星
+    base: 0.35 + depth * 0.35,
+    amp: 0.25 + depth * 0.2,
+    phase: rand(0, Math.PI * 2),
+    twinkle: rand(0.01, 0.04),
+  });
+}
+
+function spawnMeteor() {
+  particles.push({
+    type: "meteor",
+    x: rand(canvas.width * 0.2, canvas.width),
+    y: rand(0, canvas.height * 0.4),
+    vx: -rand(6, 10), vy: rand(2.5, 4.5),
+    life: 50, maxLife: 50,
+  });
 }
 
 function spawnFirefly() {
@@ -350,6 +376,9 @@ function tick() {
     }
   } else if (mode === "fireflies") {
     if (count("firefly") < 24) spawnFirefly();
+  } else if (mode === "stars") {
+    if (count("star") < 130) for (let i = 0; i < 10; i++) spawnStar();
+    if (Math.random() < 0.006 && count("meteor") < 2) spawnMeteor(); // 平均每 3 秒左右一颗流星
   }
 
   // 就地遍历 + 压缩,不能用 filter:更新过程中爆炸会往数组里追加新粒子,
@@ -568,6 +597,48 @@ const UPDATE = {
     return p.life > 0;
   },
 
+  star(p) {
+    p.x -= p.drift; // 整片星空极缓慢地平移,近层快远层慢
+    if (p.x < -5) p.x = canvas.width + 5;
+    const a = Math.min(1, p.base + p.amp * Math.sin(p.phase + frame * p.twinkle));
+    ctx.globalAlpha = Math.max(a, 0.05);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    return true; // 常驻,切换模式时统一清理
+  },
+
+  meteor(p) {
+    p.x += p.vx; p.y += p.vy;
+    p.life--;
+    // 头 8 帧淡入、尾 20 帧淡出,划过的中段最亮
+    const a = Math.min(1, (p.maxLife - p.life) / 8, p.life / 20);
+    const tail = 14; // 尾迹长度 = 速度的倍数
+    const tx = p.x - p.vx * tail;
+    const ty = p.y - p.vy * tail;
+    const g = ctx.createLinearGradient(p.x, p.y, tx, ty);
+    g.addColorStop(0, "rgba(255,255,255,.95)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return p.life > 0 && p.x > -150 && p.y < canvas.height + 150;
+  },
+
   firefly(p) {
     // 随机游走:速度每帧受微小扰动,再限幅,轨迹就像昆虫漫飞
     p.vx = Math.max(-0.5, Math.min(0.5, p.vx + rand(-0.03, 0.03)));
@@ -623,6 +694,7 @@ tick();
 
 const animToggle = document.getElementById("anim-toggle");
 syncAnimLabel();
+document.body.classList.toggle("starry", mode === "stars");
 
 animToggle.addEventListener("click", () => {
   mode = MODE_ORDER[(MODE_ORDER.indexOf(mode) + 1) % MODE_ORDER.length];
@@ -630,6 +702,7 @@ animToggle.addEventListener("click", () => {
   // 清掉旧模式的粒子(保留正在飞的火花和闪光),新模式立即可见
   particles = particles.filter(p => p.type === "spark" || p.type === "flash");
   if (mode === "fireworks") launchRocket();
+  document.body.classList.toggle("starry", mode === "stars"); // 星空模式自动换夜空底色
   syncAnimLabel();
 });
 

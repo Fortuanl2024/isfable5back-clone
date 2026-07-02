@@ -19,6 +19,18 @@ body.zen {
   --shadow: none;
 }
 
+/* 星空模式:深蓝夜空底色,写在 zen 之后,同时开启时以星空为准 */
+body.starry {
+  --bg: #0a0e1c;
+  --fg: #e8eaf2;
+  --muted: #8f95a8;
+  --card: #121729;
+  --border: #232a44;
+  --shadow: none;
+}
+body.starry::before,
+body.starry::after { opacity: .07; } /* 背景光晕调到极暗,别抢星星的戏 */
+
 * { box-sizing: border-box; }
 
 body {
