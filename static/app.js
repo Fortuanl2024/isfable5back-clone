@@ -269,7 +269,15 @@ function tick() {
     if (count("firefly") < 24) spawnFirefly();
   }
 
-  particles = particles.filter(p => UPDATE[p.type](p));
+  // 就地遍历 + 压缩,不能用 filter:更新过程中爆炸会往数组里追加新粒子,
+  // filter 只访问遍历开始时已有的元素、返回值又会整个替换数组,
+  // 导致同一帧生成的火花刚出生就被丢弃(表现为烟花只见上升不见炸开)
+  let write = 0;
+  for (let read = 0; read < particles.length; read++) {
+    const p = particles[read];
+    if (UPDATE[p.type](p)) particles[write++] = p;
+  }
+  particles.length = write;
   requestAnimationFrame(tick);
 }
 
