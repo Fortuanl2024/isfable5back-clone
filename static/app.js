@@ -176,10 +176,33 @@ function spawnEmoji() {
     type: "emoji",
     x: rand(0, canvas.width), y: -30,
     char: pick(EMOJIS),
-    size: rand(18, 34),
+    size: pick([18, 22, 26, 30, 34]), // 尺寸取档位而非连续随机,精灵缓存才能命中
     vy: rand(1, 3), vx: rand(-0.5, 0.5),
     rot: rand(-0.5, 0.5), vr: rand(-0.04, 0.04),
   });
+}
+
+/* emoji 精灵缓存:fillText 渲染彩色 emoji 字形非常昂贵,
+   每种字符每档尺寸只画一次到离屏 canvas,之后每帧用廉价的 drawImage 贴图 */
+const EMOJI_SPRITES = new Map();
+function emojiSprite(char, size) {
+  const key = char + "@" + size;
+  let s = EMOJI_SPRITES.get(key);
+  if (!s) {
+    const dpr = devicePixelRatio || 1;
+    const box = Math.ceil(size * 1.4); // 留边距,防止字形溢出被裁切
+    const c = document.createElement("canvas");
+    c.width = c.height = Math.ceil(box * dpr);
+    const cc = c.getContext("2d");
+    cc.scale(dpr, dpr); // 按设备像素比渲染,高分屏上依然清晰
+    cc.font = `${size}px serif`;
+    cc.textAlign = "center";
+    cc.textBaseline = "middle";
+    cc.fillText(char, box / 2, box / 2);
+    s = { canvas: c, box };
+    EMOJI_SPRITES.set(key, s);
+  }
+  return s;
 }
 
 function spawnFirefly() {
@@ -317,13 +340,11 @@ const UPDATE = {
 
   emoji(p) {
     p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+    const s = emojiSprite(p.char, p.size);
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rot);
-    ctx.font = `${p.size}px serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(p.char, 0, 0);
+    ctx.drawImage(s.canvas, -s.box / 2, -s.box / 2, s.box, s.box);
     ctx.restore();
     return p.y < canvas.height + 40;
   },
