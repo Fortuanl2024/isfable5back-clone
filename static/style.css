@@ -1,0 +1,276 @@
+:root {
+  --bg: #faf9f5;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --card: #ffffff;
+  --border: #e6e2d8;
+  --accent: #c96442;
+  --yes: #2e8b57;
+  --no: #c0392b;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .06);
+}
+
+body.zen {
+  --bg: #17171a;
+  --fg: #ececec;
+  --muted: #9a9a9a;
+  --card: #202024;
+  --border: #33333a;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  transition: background .3s, color .3s;
+}
+
+#confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo { font-weight: 700; font-size: 18px; letter-spacing: -.3px; }
+.logo .dot { color: var(--accent); font-weight: 400; }
+
+.topbar-actions { display: flex; gap: 8px; }
+
+.chip {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+
+main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+
+.hero { text-align: center; padding: 56px 0 40px; }
+
+.hero-question { font-size: 20px; color: var(--muted); margin: 0; }
+
+.answer {
+  font-size: clamp(80px, 22vw, 160px);
+  line-height: 1.05;
+  margin: 8px 0;
+  letter-spacing: -4px;
+}
+.answer.no { color: var(--no); }
+
+/* Yes 用渐变裁剪出文字,再滚动背景位置形成流光扫过的效果;
+   渐变两端同色,循环接缝不可见 */
+.answer.yes {
+  background: linear-gradient(100deg, var(--yes) 42%, #8fe0b4 50%, var(--yes) 58%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 3.5s linear infinite;
+}
+@keyframes shimmer {
+  from { background-position: 150% 0; }
+  to   { background-position: -50% 0; }
+}
+
+/* 状态值出现/翻转时的弹出动画,带回弹过冲 */
+.answer.pop { animation: pop .6s cubic-bezier(.2, 1.6, .4, 1); }
+/* pop 和 shimmer 都写在 animation 上,同时存在时需要合并声明 */
+.answer.yes.pop {
+  animation: pop .6s cubic-bezier(.2, 1.6, .4, 1),
+             shimmer 3.5s linear infinite;
+}
+@keyframes pop {
+  0%   { transform: scale(.3); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.hint { font-size: 12px; color: var(--muted); margin-top: 16px; }
+
+.status-detail { font-size: 16px; margin: 0 0 12px; }
+
+.status-meta { font-size: 13px; color: var(--muted); }
+
+.pulse {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--yes);
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(46, 139, 87, .5); }
+  70%  { box-shadow: 0 0 0 8px rgba(46, 139, 87, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 139, 87, 0); }
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-bottom: 20px;
+  transition: transform .25s, box-shadow .25s;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .08);
+}
+.card h2 { margin: 0 0 16px; font-size: 18px; }
+
+/* 订阅表单 */
+.subscribe form { display: flex; gap: 8px; }
+.subscribe input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+}
+.subscribe button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.subscribe button:hover { filter: brightness(1.1); }
+.subscribe-msg { color: var(--yes); font-size: 14px; margin: 10px 0 0; }
+
+/* FAQ */
+details { border-top: 1px solid var(--border); padding: 12px 0; }
+details:first-of-type { border-top: none; padding-top: 0; }
+summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+details p { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 10px 0 0; }
+code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+
+/* 时间线 */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li {
+  position: relative;
+  padding: 0 0 20px 22px;
+  border-left: 2px solid var(--border);
+  margin-left: 6px;
+}
+.timeline li:last-child { padding-bottom: 0; }
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: -6px; top: 4px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.timeline .date { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+.timeline .title { font-size: 14px; line-height: 1.6; }
+.timeline .source { font-size: 12px; color: var(--muted); }
+
+/* 模型网格 */
+.model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .model-grid { grid-template-columns: 1fr; } }
+
+.model-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--bg);
+}
+.model-item .name { font-weight: 600; font-size: 14px; }
+.model-item .eta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-top: 8px;
+}
+.badge.released { background: rgba(46, 139, 87, .12); color: var(--yes); }
+.badge.rumor { background: rgba(201, 100, 66, .12); color: var(--accent); }
+
+footer {
+  text-align: center;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- 卡片滚动进入视口时淡入上浮 ---------- */
+.pre-reveal { opacity: 0; }
+.reveal { animation: rise .7s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 背景光晕:两团模糊色斑缓慢漂移,营造纵深感 ----------
+   body 的背景色会传播到根画布上绘制,所以负 z-index 的伪元素
+   依然显示在页面背景之上、内容之下 */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: .16;
+  z-index: -1;
+  pointer-events: none;
+}
+body::before {
+  background: radial-gradient(circle, #c96442, transparent 62%);
+  top: -18vmax;
+  left: -12vmax;
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+body::after {
+  background: radial-gradient(circle, #4a7ab5, transparent 62%);
+  bottom: -22vmax;
+  right: -12vmax;
+  animation: drift-b 34s ease-in-out infinite alternate;
+}
+body.zen::before,
+body.zen::after { opacity: .1; }
+@keyframes drift-a {
+  to { transform: translate(9vmax, 7vmax) scale(1.15); }
+}
+@keyframes drift-b {
+  to { transform: translate(-8vmax, -9vmax) scale(1.12); }
+}
+
+/* ---------- 系统开启"减少动态效果"时静止所有装饰动画 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  body::before, body::after, .answer, .pulse, .reveal {
+    animation: none !important;
+  }
+  .pre-reveal { opacity: 1; }
+}
