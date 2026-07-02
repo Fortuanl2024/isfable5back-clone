@@ -270,6 +270,48 @@ function celebrate() {
   for (let i = 0; i < 4; i++) setTimeout(() => launchRocket(), i * 350);
 }
 
+/* ---------- 气球连击 ---------- */
+
+let combo = 0;
+let lastPopAt = 0;
+
+function registerCombo(x, y) {
+  const now = performance.now();
+  combo = now - lastPopAt < 1800 ? combo + 1 : 1; // 1.8 秒内连续点破才算连击
+  lastPopAt = now;
+  if (combo < 2) return;
+
+  // 同屏只保留一条连击提示,新的顶掉旧的,避免叠成一团
+  particles = particles.filter(q => q.type !== "combotext");
+
+  const text = combo + " 连击" + (combo >= 10 ? " 🔥" : combo >= 5 ? " ⚡" : "!");
+  particles.push({
+    type: "combotext",
+    // 夹在视口内,贴边的气球提示也不会被裁掉
+    x: Math.min(Math.max(x, 70), canvas.width - 70),
+    y: Math.max(y, 50),
+    text,
+    size: 18 + Math.min(combo * 2, 26), // 连击越高字越大,封顶防止真的占满屏
+    hue: (combo * 32) % 360,            // 颜色随连击数滚动
+    vy: -0.5,
+    life: 60, maxLife: 60,
+  });
+
+  // 每满 5 连,在提示周围加一圈星光
+  if (combo % 5 === 0) {
+    for (let i = 0; i < 12; i++) {
+      const ang = (i / 12) * Math.PI * 2;
+      particles.push({
+        type: "stardust",
+        x: x + Math.cos(ang) * 40, y: y + Math.sin(ang) * 40,
+        r: rand(5, 10), rot: rand(0, Math.PI),
+        color: "#ffd700",
+        life: 40, maxLife: 40,
+      });
+    }
+  }
+}
+
 function popBalloon(p, drawX) {
   // 一小团闪光 + 一圈橡胶碎片从球面向外飞溅
   particles.push({ type: "flash", x: drawX, y: p.y, maxR: p.r * 2.2, life: 8, maxLife: 8, color: p.color });
@@ -455,6 +497,40 @@ const UPDATE = {
     return p.life > 0;
   },
 
+  combotext(p) {
+    p.life--;
+    p.y += p.vy; // 缓缓上飘
+    const t = 1 - p.life / p.maxLife;
+    // 入场回弹:先冲到 1.15 倍再落回 1 倍
+    let scale;
+    if (t < 0.15) scale = 0.4 + (t / 0.15) * 0.75;
+    else if (t < 0.3) scale = 1.15 - ((t - 0.15) / 0.15) * 0.15;
+    else scale = 1;
+    // 最后 35% 生命淡出
+    const a = p.life < p.maxLife * 0.35 ? p.life / (p.maxLife * 0.35) : 1;
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = a;
+    ctx.font = `bold ${p.size}px "Segoe UI", "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 4;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(255,255,255,.85)"; // 白描边保证任何背景下都清晰
+    ctx.strokeText(p.text, 0, 0);
+    const g = ctx.createLinearGradient(-50, 0, 50, 0);
+    g.addColorStop(0, `hsl(${p.hue}, 95%, 58%)`);
+    g.addColorStop(1, `hsl(${p.hue + 60}, 95%, 52%)`);
+    ctx.fillStyle = g;
+    ctx.shadowColor = `hsl(${p.hue}, 95%, 60%)`;
+    ctx.shadowBlur = 14;
+    ctx.fillText(p.text, 0, 0);
+    ctx.restore();
+    return p.life > 0;
+  },
+
   shred(p) {
     p.x += p.vx; p.y += p.vy;
     p.vy += 0.15; // 橡胶片比火花重,坠得快
@@ -576,6 +652,7 @@ addEventListener("pointerdown", e => {
     if (nx * nx + ny * ny <= 1.3) { // 判定范围略大于球面,更好点中
       popBalloon(p, drawX);
       particles.splice(i, 1);
+      registerCombo(drawX, p.y - p.r - 16); // 提示出现在气球上方
       return; // 点中气球时不再触发烟花
     }
   }
