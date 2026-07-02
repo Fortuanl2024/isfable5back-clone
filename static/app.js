@@ -204,16 +204,41 @@ function launchRocket(x = rand(canvas.width * 0.15, canvas.width * 0.85)) {
   });
 }
 
-function explode(x, y, color, count = 70) {
+function explode(x, y, color, count = 100, shape) {
+  // 四种爆炸形状:牡丹(球形,出现概率加倍)/ 圆环 / 垂柳 / 炸裂(带二次爆)
+  shape = shape || pick(["peony", "peony", "ring", "willow", "crackle"]);
+
+  // 爆炸瞬间的白色闪光,快速扩张后消失
+  particles.push({ type: "flash", x, y, maxR: count * 1.1, life: 10, maxLife: 10, color });
+
   for (let i = 0; i < count; i++) {
     const ang = rand(0, Math.PI * 2);
-    const speed = rand(1, 6);
-    const maxLife = rand(40, 80);
+    let speed, life, gravity = 0.06, drag = 0.985, crackle = false;
+
+    if (shape === "ring") {
+      speed = rand(4.6, 5.2); // 速度几乎一致,炸成一个正圆环
+      life = rand(50, 70);
+    } else if (shape === "willow") {
+      speed = rand(1, 5);
+      gravity = 0.045;
+      drag = 0.96; // 强阻力让火花很快失去横向速度,只剩下坠,拖出柳枝般的金色长尾
+      life = rand(90, 140);
+    } else if (shape === "crackle") {
+      speed = rand(1.5, 5.5);
+      life = rand(40, 70);
+      crackle = Math.random() < 0.5; // 一半火花飞到中途还会再炸一次
+    } else { // peony 牡丹:七成火花在外壳、三成填充内部,形成饱满球形
+      speed = Math.random() < 0.7 ? rand(4, 6) : rand(1, 3.5);
+      life = rand(45, 85);
+    }
+
     particles.push({
-      type: "spark",
-      x, y,
+      type: "spark", x, y,
       vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
-      color, life: maxLife, maxLife,
+      color: shape === "willow"
+        ? pick(["#ffd700", "#ffcc66"])
+        : (Math.random() < 0.22 ? "#fff6e0" : color), // 混入两成白热火花,层次更亮
+      life, maxLife: life, gravity, drag, crackle,
     });
   }
 }
@@ -236,7 +261,10 @@ function tick() {
   } else if (mode === "emoji") {
     if (count("emoji") < 40) spawnEmoji();
   } else if (mode === "fireworks") {
-    if (frame % 70 === 0) launchRocket();
+    if (frame % 60 === 0) {
+      launchRocket();
+      if (Math.random() < 0.35) launchRocket(); // 三成概率双发齐放
+    }
   } else if (mode === "fireflies") {
     if (count("firefly") < 24) spawnFirefly();
   }
@@ -333,16 +361,70 @@ const UPDATE = {
 
   spark(p) {
     p.x += p.vx; p.y += p.vy;
-    p.vy += 0.06; // 重力
-    p.vx *= 0.99; // 空气阻力
+    p.vy += p.gravity ?? 0.06;
+    const drag = p.drag ?? 0.99;
+    p.vx *= drag; p.vy *= drag;
     p.life--;
-    const alpha = p.life / p.maxLife;
-    ctx.globalAlpha = Math.max(alpha, 0);
-    ctx.fillStyle = p.color;
+
+    // 二次爆裂:飞到生命 40% 处再炸出一小簇金色碎火花
+    if (p.crackle && p.life <= p.maxLife * 0.4) {
+      p.crackle = false;
+      for (let i = 0; i < 6; i++) {
+        const ang = rand(0, Math.PI * 2);
+        const sp = rand(0.5, 2);
+        particles.push({
+          type: "spark", x: p.x, y: p.y,
+          vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+          color: "#ffe9a0", life: rand(15, 30), maxLife: 30,
+          gravity: 0.05, drag: 0.98,
+        });
+      }
+    }
+
+    let a = Math.max(p.life / p.maxLife, 0);
+    if (a < 0.35) a *= rand(0.2, 1.2); // 熄灭前不规则闪烁,像真实火星
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter"; // 叠加混合:重叠处更亮,产生辉光感
+    ctx.globalAlpha = Math.min(a, 1);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 1 + 1.6 * a;
+    ctx.lineCap = "round";
+    const speed2 = p.vx * p.vx + p.vy * p.vy;
+    if (speed2 > 0.1) {
+      // 沿速度反方向拉长成线,形成运动拖尾
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.vx * 3.5, p.y - p.vy * 3.5);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    } else {
+      // 几乎静止的火花退化为圆点,避免零长度线段画不出来
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return p.life > 0;
+  },
+
+  flash(p) {
+    p.life--;
+    const t = 1 - p.life / p.maxLife;
+    const r = 6 + p.maxR * Math.pow(t, 0.45); // 先快后慢地扩张
+    const a = Math.max(p.life / p.maxLife, 0);
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    g.addColorStop(0, "rgba(255,255,240,1)");
+    g.addColorStop(0.3, p.color);
+    g.addColorStop(1, "transparent");
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.9 * a;
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 0.5 + 2 * alpha, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.restore();
     return p.life > 0;
   },
 
@@ -405,8 +487,8 @@ syncAnimLabel();
 animToggle.addEventListener("click", () => {
   mode = MODE_ORDER[(MODE_ORDER.indexOf(mode) + 1) % MODE_ORDER.length];
   localStorage.setItem("animMode", mode);
-  // 清掉旧模式的粒子(保留正在飞的火花),新模式立即可见
-  particles = particles.filter(p => p.type === "spark");
+  // 清掉旧模式的粒子(保留正在飞的火花和闪光),新模式立即可见
+  particles = particles.filter(p => p.type === "spark" || p.type === "flash");
   if (mode === "fireworks") launchRocket();
   syncAnimLabel();
 });
